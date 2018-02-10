@@ -1,3 +1,8 @@
+(function(){
+
+var mp = TYRANO.kag.stat.mp;
+TYRANO.kag.stat.show = mp.show || "each";           // each, once
+TYRANO.kag.stat.ruby_type = mp.type || "center";    // center, justify
 
 var ruby_dic = TYRANO.kag.stat.ruby_dic;
 if (typeof ruby_dic === "undefined") {
@@ -16,6 +21,7 @@ var getRubySetting = function(str, text) {
     var ruby_offset = (TYRANO.kag.stat.font.size*-1)+(TYRANO.kag.config.defaultRubyOffset*-1);
 
     var conf = {
+        text : text,
         ruby_size : TYRANO.kag.config.defaultRubySize,
         ruby_offset : ruby_offset,
         font_size : TYRANO.kag.stat.font.size,
@@ -38,6 +44,25 @@ var getFontSize = function(str, font_size) {
 
 };
 
+var createRubytag = {
+    center: function (ruby_no, conf, str, text) {
+        var ruby_tag = "<span class='ruby_str"+ruby_no+"' style='display:inline-block;position:relative; width:"+conf.str_width+"px; font-size:"+conf.font_size+"px;'>" + str;
+        ruby_tag += "<span class='ruby_text"+ruby_no+"' style='position:absolute; width:"+conf.text_width+"px; white-space: nowrap; font-size:"+conf.ruby_size+"px; top:"+conf.ruby_offset+"px; left:"+conf.startpos+"px;'>" + text;
+        ruby_tag += "</span></span>";
+        return ruby_tag;
+    },
+    justify: function (ruby_no, conf, str, text) {
+        if (conf.text.length === 1 || conf.text_width - conf.str_width > 0) {
+            return this.center.apply(this, arguments);
+        }
+        var spacing = parseInt((conf.str_width - conf.text_width) / (conf.text.length - 1));
+        var ruby_tag = "<span class='ruby_str"+ruby_no+"' style='display:inline-block;position:relative; width:"+conf.str_width+"px; font-size:"+conf.font_size+"px;'>" + str;
+        ruby_tag += "<span class='ruby_text"+ruby_no+"' style='position:absolute;letter-spacing:"+spacing+"px;width:100%; white-space: nowrap; font-size:"+conf.ruby_size+"px; top:"+conf.ruby_offset+"px; left:0;'>" + text;
+        ruby_tag += "</span></span>";
+        return ruby_tag;
+    }
+}
+
 TYRANO.kag.stat.ruby_no = -1;
 var getRubytag = function(str, text, char) {
 
@@ -54,9 +79,7 @@ var getRubytag = function(str, text, char) {
         i = i + cnt-1;
     }
 
-    var ruby_tag = "<span class='ruby_str"+ruby_no+"' style='position:relative; width:"+conf.str_width+"px; font-size:"+conf.font_size+"px;'>" + char;
-    ruby_tag += "<span class='ruby_text"+ruby_no+"' style='position:absolute; width:"+conf.text_width+"px; white-space: nowrap; font-size:"+conf.ruby_size+"px; top:"+conf.ruby_offset+"px; left:"+conf.startpos+"px;'>" + TYRANO.kag.stat.ruby_text[0];
-    ruby_tag += "</span></span>";
+    var ruby_tag = createRubytag[TYRANO.kag.stat.ruby_type](ruby_no, conf, char, TYRANO.kag.stat.ruby_text[0]);
 
     return ruby_tag;
 };
@@ -64,12 +87,37 @@ var getRubytag = function(str, text, char) {
 var getStdRubytag = function(str, text, ruby_no) {
 
     var conf = getRubySetting(str, text);
-
-    var ruby_tag = "<span class='ruby_str"+ruby_no+"' style='position:relative; width:"+conf.str_width+"px; font-size:"+conf.font_size+"px;'>" + str;
-    ruby_tag += "<span class='ruby_text"+ruby_no+"' style='position:absolute; width:"+conf.text_width+"px; white-space: nowrap; font-size:"+conf.ruby_size+"px; top:"+conf.ruby_offset+"px; left:"+conf.startpos+"px;'>" + text;
-    ruby_tag += "</span></span>";
+    var ruby_tag = createRubytag[TYRANO.kag.stat.ruby_type](ruby_no, conf, str, text);
 
     return ruby_tag;
+};
+
+TYRANO.kag.stat.ruby_manual = [];
+tyrano.plugin.kag.tag.ruby.start = function(pm) {
+
+    // [edit.start] ================================================
+
+    TYRANO.kag.stat.ruby_text = [];
+
+    var str = pm.str || "";
+    var text = pm.text;
+
+    TYRANO.kag.stat.ruby_no++;
+    var ruby_no = TYRANO.kag.stat.ruby_no;
+    var cnt = Math.ceil(parseInt(text.length)/parseInt(str.length));
+    for(var i = 0; i < text.length; i++) {
+        var text_tmp = text.substr(i, cnt);
+        TYRANO.kag.stat.ruby_text.push(text_tmp);
+        i = i + cnt-1;
+    }
+
+    this.kag.stat.ruby_manual = [str, text];
+
+    if (str != "") this.kag.ftag.startTag("text", {"val" : str});
+    else this.kag.ftag.nextOrder();
+
+    // [edit.end] ==================================================
+
 };
 
 tyrano.plugin.kag.tag.text.showMessage = function(message_str,pm) {
@@ -87,7 +135,7 @@ tyrano.plugin.kag.tag.text.showMessage = function(message_str,pm) {
             ruby_target.push([pos.index, key, ruby_dic[key].ruby]);
         }
     }
-    ruby_target = ruby_target.sort(function(a,b) { return(a[0] - b[0]); });
+    ruby_target = ruby_target.sort(function(a,b) { return(a[0]-b[0]); });
 
     // [add.end] ====================================================
 
@@ -217,11 +265,27 @@ tyrano.plugin.kag.tag.text.showMessage = function(message_str,pm) {
             var c = _message_str.substring(index, ++index);
 
             //ルビ指定がされている場合
-            if (that.kag.stat.ruby_str != "") {
-                TYRANO.kag.stat.ruby_no++;
-                c = getStdRubytag(c, that.kag.stat.ruby_str, TYRANO.kag.stat.ruby_no);
-                that.kag.stat.ruby_str = "";
-                current_str += c;
+            if (that.kag.stat.ruby_manual.length != 0) {
+                var key = that.kag.stat.ruby_manual[0];
+                var value = that.kag.stat.ruby_manual[1];
+                if (key != "") {
+                    if (key.substr(0, 1) == c) {
+                        target_key_length = key.length-1;
+                        current_str += getRubytag(key, value, c);
+                        if (key.length == 1)  that.kag.stat.ruby_manual = [];
+                    } else {
+                        ruby_text_cnt++;
+                        var class_name = ".ruby_text" + TYRANO.kag.stat.ruby_no;
+                        jtext.find("p").find(".current_span").find(class_name).before(c);
+                        jtext.find("p").find(".current_span").find(class_name).append(TYRANO.kag.stat.ruby_text[ruby_text_cnt]);
+                        current_str = jtext.find("p").find(".current_span").html();
+                        if (key.length-1 == ruby_text_cnt) that.kag.stat.ruby_manual = [];
+                    }
+                } else {
+                    c = getStdRubytag(c, value, TYRANO.kag.stat.ruby_no);
+                    current_str += c;
+                    that.kag.stat.ruby_manual = [];
+                }
             } else {
                 if (ruby_target.length != 0) {
                     var pos = ruby_target[0][0];
@@ -238,8 +302,8 @@ tyrano.plugin.kag.tag.text.showMessage = function(message_str,pm) {
                                 if (TYRANO.kag.stat.ruby_dic[key].count == 0) {
                                     target_key_length = key.length-1;
                                     current_str += getRubytag(key, value, c);
-                                    if (key.length == 1) ruby_target.shift();
                                 } else current_str += c;
+                                if (key.length == 1) ruby_target.shift();
                                 break;
                             default:
                                 target_key_length = key.length-1;
@@ -266,12 +330,14 @@ tyrano.plugin.kag.tag.text.showMessage = function(message_str,pm) {
 
             //current_str += c;
 
-            // [edit.end] ====================================================
-
             //スキップ中は１文字ずつ追加ということはしない
-            if(that.kag.stat.is_skip != true && that.kag.stat.is_nowait!=true && ch_speed >3){
-                that.kag.appendMessage(jtext, current_str);
-            }
+            //if(that.kag.stat.is_skip != true && that.kag.stat.is_nowait!=true && ch_speed >3){
+            //    that.kag.appendMessage(jtext, current_str);
+            //}
+
+            that.kag.appendMessage(jtext, current_str);
+
+            // [edit.end] ====================================================
 
             if (index <= _message_str.length) {
 
@@ -326,3 +392,4 @@ tyrano.plugin.kag.tag.text.showMessage = function(message_str,pm) {
     })(this.kag.getMessageInnerLayer());
 
 };
+}());
