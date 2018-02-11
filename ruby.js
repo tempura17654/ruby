@@ -55,7 +55,7 @@ var createRubytag = {
         if (conf.text.length === 1 || conf.text_width - conf.str_width > 0) {
             return this.center.apply(this, arguments);
         }
-        var spacing = parseInt((conf.str_width - conf.text_width) / (conf.text.length - 1));
+        var spacing = (conf.str_width - conf.text_width) / (conf.text.length - 1);
         var ruby_tag = "<span class='ruby_str"+ruby_no+"' style='display:inline-block;position:relative; width:"+conf.str_width+"px; font-size:"+conf.font_size+"px;'>" + str;
         ruby_tag += "<span class='ruby_text"+ruby_no+"' style='position:absolute;letter-spacing:"+spacing+"px;width:100%; white-space: nowrap; font-size:"+conf.ruby_size+"px; top:"+conf.ruby_offset+"px; left:0;'>" + text;
         ruby_tag += "</span></span>";
